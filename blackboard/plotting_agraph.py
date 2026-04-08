@@ -1,47 +1,59 @@
+"""Модуль для управления графиками."""
+
+from typing import Optional
+
 import tkinter as tk
 from tkinter import ttk
+
+import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-from constants import parameter_units
+
+from constants import PARAMETER_UNITS
+
 
 class PlotManager:
-    """Менеджер для управления графиками"""
+    """Менеджер для управления графиками."""
 
-    def __init__(self, parent_frame, status_var=None):
+    def __init__(self, parent_frame: tk.Widget, status_var: Optional[tk.StringVar] = None):
+        """Инициализирует менеджер графиков.
+
+        Args:
+            parent_frame: Родительский фрейм для размещения графика.
+            status_var: Переменная для отображения статуса.
+        """
         self.parent_frame = parent_frame
         self.status_var = status_var
-        self.current_figure = None
-        self.current_canvas = None  # Инициализирую переменную для хранения холста tkinter
+        self.current_figure: Optional[Figure] = None
+        self.current_canvas: Optional[FigureCanvasTkAgg] = None
 
-    def create_plot(self, df, x_col, y_col):
-        """Создает или обновляет график с выбранными данными"""
-        # Очищаю предыдущий график
+    def create_plot(self, df: pd.DataFrame, x_col: str, y_col: str) -> Optional[Figure]:
+        """Создает или обновляет график.
+
+        Args:
+            df: DataFrame с данными.
+            x_col: Имя столбца для оси X.
+            y_col: Имя столбца для оси Y.
+
+        Returns:
+            Объект Figure или None при ошибке.
+        """
         self.clear_plot()
 
         if not x_col or not y_col:
-            return
+            return None
 
         try:
-            # Создаю новую фигуру
-            self.current_figure = Figure(figsize=(10, 6))  # В дюймах
+            self.current_figure = Figure(figsize=(10, 6))
             ax = self.current_figure.add_subplot(111)
 
-            # Строю график
             ax.plot(df[x_col], df[y_col])
-            if parameter_units[x_col]: # Подписи на графике с единицами измерения и без
-                ax.set_xlabel(f'{x_col}, {parameter_units[x_col]}') 
-            else:
-                ax.set_xlabel(f'{x_col}')
-            if parameter_units[y_col]:
-                ax.set_ylabel(f'{y_col}, {parameter_units[y_col]}')
-            else:
-                ax.set_ylabel(f'{y_col}')
+            self._set_axis_labels(ax, x_col, y_col)
             ax.set_title(f"{x_col} | {y_col}")
-            ax.grid(True)  # Отображение сетки
+            ax.grid(True)
 
-            # Встраиваю в Tkinter, следующая строчка - создаю холст в родительском фрейме
             self.current_canvas = FigureCanvasTkAgg(self.current_figure, self.parent_frame)
-            self.current_canvas.draw()  # Рисую график на холсте
+            self.current_canvas.draw()
             self.current_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
             if self.status_var:
@@ -50,22 +62,48 @@ class PlotManager:
             return self.current_figure
 
         except Exception as e:
-            error_label = ttk.Label(
-                self.parent_frame,
-                text=f"Ошибка построения: {str(e)}", foreground="red"
-            )
-            error_label.pack(pady=10)
-            if self.status_var:
-                self.status_var.set(f"Ошибка: {str(e)}")
+            self._show_error(f"Ошибка построения: {str(e)}")
             return None
 
+    def _set_axis_labels(self, ax, x_col: str, y_col: str):
+        """Устанавливает подписи осей с единицами измерения.
+
+        Args:
+            ax: Объект оси matplotlib.
+            x_col: Имя столбца для оси X.
+            y_col: Имя столбца для оси Y.
+        """
+        x_unit = PARAMETER_UNITS.get(x_col, "")
+        y_unit = PARAMETER_UNITS.get(y_col, "")
+
+        x_label = f"{x_col}, {x_unit}" if x_unit else x_col
+        y_label = f"{y_col}, {y_unit}" if y_unit else y_col
+
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+
+    def _show_error(self, message: str):
+        """Отображает сообщение об ошибке.
+
+        Args:
+            message: Текст сообщения.
+        """
+        error_label = ttk.Label(
+            self.parent_frame,
+            text=message,
+            foreground="red"
+        )
+        error_label.pack(pady=10)
+
+        if self.status_var:
+            self.status_var.set(f"Ошибка: {message}")
+
     def clear_plot(self):
-        """Очищает текущий график"""
+        """Очищает текущий график."""
         if self.current_canvas:
             self.current_canvas.get_tk_widget().destroy()
             self.current_canvas = None
         self.current_figure = None
 
-        # Очищаю все виджеты в родительском фрейме
         for widget in self.parent_frame.winfo_children():
             widget.destroy()
