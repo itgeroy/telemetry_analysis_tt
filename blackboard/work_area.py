@@ -7,7 +7,7 @@ from tkinter import ttk
 
 import pandas as pd
 
-from constants import PARAMETER_CATEGORIES
+from constants import CATEGORY_RULES
 from blackboard.plotting_agraph import PlotManager
 
 
@@ -70,8 +70,8 @@ def create_basic_info_tab(notebook: ttk.Notebook, df: pd.DataFrame) -> ttk.Frame
         "ИНФОРМАЦИЯ О ДАННЫХ:\n",
         f"• Всего записей: {len(df):,}",
         f"• Количество параметров: {len(df.columns)}",
-        f"• Временной диапазон: {df['Timestamp'].min()} - {df['Timestamp'].max()}",
-        f"• Длительность записи: {df['Timestamp'].max() - df['Timestamp'].min()}",
+        f"• Временной диапазон: {df['timestamp'].min()} - {df['timestamp'].max()}",
+        f"• Длительность записи: {df['timestamp'].max() - df['timestamp'].min()}",
     ]
 
     for category, params in categorized.items():
@@ -126,12 +126,64 @@ def create_statics_tab(notebook: ttk.Notebook, df: pd.DataFrame) -> ttk.Frame:
 
     return frame
 
+def create_parameter_values(notebook: ttk.Notebook, df: pd.DataFrame) -> ttk.Frame:
+    """Создает вкладку с значениями контретного параметра.
 
+    Args:
+        notebook: Виджет блокнота.
+        df: DataFrame с данными.
+
+    Returns:
+        Фрейм вкладки.
+    """
+    frame = ttk.Frame(notebook)
+    notebook.add(frame, text="Данные")
+    
+    val_frame = ttk.Frame(frame)
+    val_frame.pack(fill=tk.X, padx=10, pady=5)
+
+    ttk.Label(val_frame, text="Параметр:").grid(row=0, column=0, padx=5, pady=5)
+    var = tk.StringVar(value="timestamp")
+    combobox = ttk.Combobox(val_frame, textvariable=var, state="readonly")
+    combobox.set(df.columns[0])
+    combobox["values"] = list(df.columns)
+    combobox.grid(row=0, column=1, padx=5, pady=5)
+    
+    def show_values():
+        tree.delete(*tree.get_children())
+        
+        param = var.get()
+
+        
+        subset = df[['timestamp', param]].dropna(subset=[param])
+        
+        for _, row in subset.iterrows():
+            time_str = row['timestamp'].strftime('%H:%M:%S.%f')[:-3]
+            tree.insert("", "end", values=(time_str, row[param]))
+
+    plot_btn = ttk.Button(val_frame, text="Выбрать параметр", command=show_values)
+    plot_btn.grid(row=0, column=4, padx=5, pady=5)
+    
+    columns = ("Время", "Значение")
+    tree = ttk.Treeview(frame, columns=columns, show="headings", height=20)
+
+
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=100)
+
+    scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    return frame
+
+    
+    
 def create_plots_tab(
-    notebook: ttk.Notebook,
-    df: pd.DataFrame,
-    status_var: Optional[tk.StringVar] = None
-) -> list:
+    notebook: ttk.Notebook, df: pd.DataFrame, status_var: Optional[tk.StringVar] = None) -> list:
     """Создает вкладку с графиками параметров.
 
     Args:
@@ -150,14 +202,14 @@ def create_plots_tab(
 
     # Выбор параметра для оси X
     ttk.Label(control_frame, text="Ось X:").grid(row=0, column=0, padx=5, pady=5)
-    x_var = tk.StringVar(value="Timestamp")
+    x_var = tk.StringVar(value="timestamp")
     x_combobox = ttk.Combobox(control_frame, textvariable=x_var, state="readonly")
     x_combobox["values"] = list(df.columns)
     x_combobox.grid(row=0, column=1, padx=5, pady=5)
 
     # Выбор параметра для оси Y
     ttk.Label(control_frame, text="Ось Y:").grid(row=0, column=2, padx=5, pady=5)
-    y_var = tk.StringVar(value="Timestamp")
+    y_var = tk.StringVar(value="timestamp")
     y_combobox = ttk.Combobox(control_frame, textvariable=y_var, state="readonly")
     y_combobox["values"] = list(df.columns)
     y_combobox.grid(row=0, column=3, padx=5, pady=5)
@@ -166,7 +218,7 @@ def create_plots_tab(
     plot_frame = ttk.Frame(frame)
     plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    # Создаю менеджер графиков
+    # Создание менеджера графиков
     plot_manager = PlotManager(plot_frame, status_var)
 
     # Функция для обновления графика
@@ -176,10 +228,10 @@ def create_plots_tab(
     plot_btn = ttk.Button(control_frame, text="Построить график", command=update_plot)
     plot_btn.grid(row=0, column=4, padx=5, pady=5)
 
-    # Строю начальный график
+    # Начальный график
     update_plot()
 
-    return [x_var.get(), y_var.get()]
+    return [x_var, y_var]
 
 def categorize_parameters(df_columns: list) -> dict:
     """Классифицирует параметры по категориям.
@@ -190,30 +242,22 @@ def categorize_parameters(df_columns: list) -> dict:
     Returns:
         Словарь с категориями и параметрами.
     """
-    categorized = {category: [] for category in PARAMETER_CATEGORIES}
+    categorized = {rule[0]: [] for rule in CATEGORY_RULES}
     categorized["Другие"] = []
 
     for column in df_columns:
+        col_lower = column.lower()
         found_category = False
-        for category, patterns in PARAMETER_CATEGORIES.items():
-            for pattern in patterns:
-                if pattern.endswith(".*"):
-                    prefix = pattern[:-2]
-                    if column.startswith(prefix):
-                        categorized[category].append(column)
-                        found_category = True
-                        break
-                elif column == pattern:
-                    categorized[category].append(column)
-                    found_category = True
-                    break
-            if found_category:
+        for category, patterns in CATEGORY_RULES:
+            if any(keyword in col_lower for keyword in patterns):
+                categorized[category].append(column)
+                found_category = True
                 break
 
         if not found_category:
             categorized["Другие"].append(column)
 
-    # Удаляю пустые категории
+    # Удаляет пустые категории
     return {k: v for k, v in categorized.items() if v}
 
 

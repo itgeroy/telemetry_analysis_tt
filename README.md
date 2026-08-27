@@ -1,4 +1,4 @@
-# ___Telemetry analysis (Test task)___
+# ___Log analysis ULG___
 
 Desktop-приложение для анализа и визуализации данных телеметрии.
 

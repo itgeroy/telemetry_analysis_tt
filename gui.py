@@ -10,7 +10,7 @@ from blackboard.data_loader import (
     export_statistics_to_txt,
     export_plot_as_png,
 )
-from blackboard.work_area import create_basic_info_tab, create_statics_tab
+from blackboard.work_area import create_basic_info_tab, create_parameter_values, create_statics_tab
 from blackboard.work_area import create_categorized_tabs, create_plots_tab
 
 
@@ -39,7 +39,7 @@ class MainApplication(ttk.Frame):
         try:
             icon = tk.PhotoImage(file="static/ping.png")
             self.parent.iconphoto(True, icon)
-        except Exception:  # pylint: disable=W0718
+        except Exception:
             pass
 
     def _apply_theme(self):
@@ -99,20 +99,22 @@ class MainApplication(ttk.Frame):
 
     def _create_tabs(self):
         """Создает вкладки с данными телеметрии."""
-        # Очищаем существующие вкладки
+        # Очистка существующей вкладки
         for tab in self.notebook.tabs():
             self.notebook.forget(tab)
 
         create_basic_info_tab(self.notebook, self.df)
         create_statics_tab(self.notebook, self.df)
-        self.current_plot_params = create_plots_tab(self.notebook, self.df, self.status_var)
+        create_parameter_values(self.notebook, self.df)
+        vars = create_plots_tab(self.notebook, self.df, self.status_var)
+        self.current_plot_params = vars
         create_categorized_tabs(self.notebook, self.df)
 
     def _open_file(self):
         """Открывает и загружает файл телеметрии."""
         file_path = filedialog.askopenfilename(
             title="Выберите файл телеметрии",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            filetypes=[("ULog files", "*.ulg"), ("All files", "*.*")],
         )
         if file_path:
             self.status_var.set(f"Загрузка файла: {file_path}...")
@@ -147,7 +149,7 @@ class MainApplication(ttk.Frame):
 
         if file_path:
             try:
-                figure = export_plot_as_png(self.df, self.current_plot_params, self.status_var)
+                figure = export_plot_as_png(self.df, [self.current_plot_params[0].get(), self.current_plot_params[1].get()], self.status_var)
                 if figure:
                     figure.savefig(file_path, dpi=300, bbox_inches="tight")
                     self.status_var.set(f"График сохранен как: {file_path}")
@@ -189,7 +191,7 @@ class MainApplication(ttk.Frame):
 
 Загрузка данных:
 • Откройте меню Файл → Открыть (Ctrl+O)
-• Выберите CSV файл с телеметрией
+• Выберите ULog файл с телеметрией
 • Данные автоматически загрузятся и проанализируются
 
 Просмотр статистики:
@@ -209,7 +211,7 @@ class MainApplication(ttk.Frame):
 
 ПРИМЕЧАНИЕ:
 • Если ещё не был построен ни один график,
-  то при экспорте будет построен базовый график Timestamp | Timestamp
+  то при экспорте будет построен базовый график timestamp | timestamp
 """
         messagebox.showinfo("Руководство пользователя", manual_text, icon="question")
 

@@ -5,13 +5,14 @@ from typing import Union
 
 import pandas as pd
 from matplotlib.figure import Figure
+import pyulog
 
 
 def load_telemetry_data(file_path: Union[str, Path]) -> pd.DataFrame:
-    """Загружает и обрабатывает CSV файл с телеметрией UAV.
+    """Загружает и обрабатывает ULG файл.
 
     Args:
-        file_path: Путь к CSV файлу.
+        file_path: Путь к ULG файлу.
 
     Returns:
         DataFrame с загруженными данными.
@@ -19,16 +20,34 @@ def load_telemetry_data(file_path: Union[str, Path]) -> pd.DataFrame:
     Raises:
         Exception: Если не удалось загрузить файл.
     """
-    try:
-        df = pd.read_csv(file_path, na_values=["--.--", "nan", "NaN", ""])
+    ulog = pyulog.ULog(file_path)
+    dfs = []
 
-        if "Timestamp" in df.columns:
-            df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
+    for data in ulog.data_list:
+        topic = data.name
+        df_topic = pd.DataFrame(data.data)
 
-        return df
+        rename = {}
+        for col in df_topic.columns:
+            if col != 'timestamp':
+                rename[col] = f'{topic}.{col}'
+        df_topic.rename(columns=rename, inplace=True)
 
-    except Exception as e:
-        raise Exception(f"Ошибка загрузки данных: {e}") from e
+        num_cols = [c for c in df_topic.columns
+                    if c != 'timestamp'
+                    and pd.api.types.is_numeric_dtype(df_topic[c])]
+        numeric_cols = ['timestamp'] + num_cols
+        df_topic = df_topic[numeric_cols]
+
+        dfs.append(df_topic)
+
+    combined = pd.concat(dfs, axis=1)
+    combined = combined.loc[:, ~combined.columns.duplicated()]
+    combined['timestamp'] = pd.to_datetime(combined['timestamp'], unit='us', errors='coerce')
+    combined = combined.sort_values('timestamp').reset_index(drop=True)
+    combined = combined.dropna(axis=1, how='all')
+
+    return combined
 
 
 def export_statistics_to_txt(df: pd.DataFrame, filename: Union[str, Path]) -> bool:
@@ -44,7 +63,7 @@ def export_statistics_to_txt(df: pd.DataFrame, filename: Union[str, Path]) -> bo
     try:
         numeric_columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
         max_param_length = max(len(str(col)) for col in df.columns)
-        separator_length = max_param_length + 52 + len(str(len(df)))
+        separator_length = max_param_length + 52 + str(len(df)).__len__()
 
         with open(filename, "w", encoding="utf-8") as f:
             f.write("СТАТИСТИКА ПАРАМЕТРОВ ТЕЛЕМЕТРИИ\n")
@@ -53,12 +72,10 @@ def export_statistics_to_txt(df: pd.DataFrame, filename: Union[str, Path]) -> bo
             f.write(f"Анализируемых параметров: {len(numeric_columns)}\n")
             f.write("=" * separator_length + "\n\n")
 
-            # Заголовок таблицы
             header = f"{'Параметр':<{max_param_length}} {'Мин':<10} {'Макс':<10} {'Среднее':<10} {'Разброс':<10} {'Заполнено':<12}\n"
             f.write(header)
             f.write("-" * separator_length + "\n")
 
-            # Данные по каждому параметру
             for column in df.columns:
                 if pd.api.types.is_numeric_dtype(df[column]):
                     stats_line = (
@@ -81,9 +98,7 @@ def export_statistics_to_txt(df: pd.DataFrame, filename: Union[str, Path]) -> bo
         return False
 
 
-def export_plot_as_png(
-    df: pd.DataFrame,
-    plot_params: list,
+def export_plot_as_png(df: pd.DataFrame, plot_params: list,
     status_var
 ) -> Union[Figure, None]:
     """Создает график для экспорта.

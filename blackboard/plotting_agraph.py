@@ -9,7 +9,7 @@ import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-from constants import PARAMETER_UNITS
+from constants import get_unit
 
 
 class PlotManager:
@@ -73,8 +73,8 @@ class PlotManager:
             x_col: Имя столбца для оси X.
             y_col: Имя столбца для оси Y.
         """
-        x_unit = PARAMETER_UNITS.get(x_col, "")
-        y_unit = PARAMETER_UNITS.get(y_col, "")
+        x_unit = get_unit(x_col)
+        y_unit = get_unit(y_col)
 
         x_label = f"{x_col}, {x_unit}" if x_unit else x_col
         y_label = f"{y_col}, {y_unit}" if y_unit else y_col

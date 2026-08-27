@@ -1,3 +1,4 @@
 pandas>=2.0.0
 matplotlib>=3.7.0
 sv-ttk>=2.3.0
+pyulog
