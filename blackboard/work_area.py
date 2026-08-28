@@ -200,19 +200,13 @@ def create_plots_tab(
     control_frame = ttk.Frame(frame)
     control_frame.pack(fill=tk.X, padx=10, pady=5)
 
-    # Выбор параметра для оси X
-    ttk.Label(control_frame, text="Ось X:").grid(row=0, column=0, padx=5, pady=5)
-    x_var = tk.StringVar(value="timestamp")
-    x_combobox = ttk.Combobox(control_frame, textvariable=x_var, state="readonly")
-    x_combobox["values"] = list(df.columns)
-    x_combobox.grid(row=0, column=1, padx=5, pady=5)
 
     # Выбор параметра для оси Y
-    ttk.Label(control_frame, text="Ось Y:").grid(row=0, column=2, padx=5, pady=5)
+    ttk.Label(control_frame, text="Ось Y:").grid(row=0, column=0, padx=5, pady=5)
     y_var = tk.StringVar(value="timestamp")
     y_combobox = ttk.Combobox(control_frame, textvariable=y_var, state="readonly")
     y_combobox["values"] = list(df.columns)
-    y_combobox.grid(row=0, column=3, padx=5, pady=5)
+    y_combobox.grid(row=0, column=1, padx=5, pady=5)
 
     # Фрейм для графика
     plot_frame = ttk.Frame(frame)
@@ -223,7 +217,7 @@ def create_plots_tab(
 
     # Функция для обновления графика
     def update_plot():
-        plot_manager.create_plot(df, x_var.get(), y_var.get())
+        plot_manager.create_plot(df, "timestamp", y_var.get())
 
     plot_btn = ttk.Button(control_frame, text="Построить график", command=update_plot)
     plot_btn.grid(row=0, column=4, padx=5, pady=5)
@@ -231,7 +225,7 @@ def create_plots_tab(
     # Начальный график
     update_plot()
 
-    return [x_var, y_var]
+    return ["timestamp", y_var]
 
 def categorize_parameters(df_columns: list) -> dict:
     """Классифицирует параметры по категориям.
