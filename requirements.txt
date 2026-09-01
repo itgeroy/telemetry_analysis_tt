@@ -1,6 +1,6 @@
 pandas>=2.0.0
 pyulog
 plotly
-pywebview
 kaleido
 sv-ttk
+matplotlib>=3.5.0

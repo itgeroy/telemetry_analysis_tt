@@ -19,7 +19,8 @@ Desktop-приложение для анализа и визуализации �
 - **Python 3.8+** - Основной язык программирования
 - **Tkinter** - Графический интерфейс
 - **Pandas** - Обработка и анализ данных
-- **Matplotlib** - Построение графиков и визуализация
+- **Plotly** - Интерактивные графики (зум, панорама, динамические линии)
+- **pywebview** - Встраивание графиков в окно приложения
 - **SV-TTK** - Современные стили для Tkinter
 
 ## Установка
@@ -38,7 +39,10 @@ cd telemetry_analysis_tt
 ```
 
 ### Установка зависимостей
-`pip install pandas matplotlib seaborn numpy sv-ttk`
+`pip install -r requirements.txt`
+
+> Примечание: на Linux для работы встроенных графиков требуется системный
+> WebKit2GTK, например: `sudo apt install webkit2gtk-4.1-dev`
 
 ### Запуск приложения
 `python main.py`

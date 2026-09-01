@@ -1,52 +1,19 @@
-"""Менеджер интерактивных графиков на базе Plotly, встроенный в окно Tkinter.
+"""Менеджер интерактивных графиков на базе matplotlib, встроенный в окно Tkinter.
 
-График отрисовывается браузерным движком (pywebview), что даёт полноценные
-функции Plotly: зум/панорама мышью, box-zoom, ховер, клик по легенде для
-скрытия/показа линии, а также динамическое добавление/удаление нескольких
-линий произвольных цветов.
-
-Plotly.js вшивается в HTML один раз (офлайн), а обновления данных отправляются
-через Plotly.react, что сохраняет текущий масштаб и панораму приложения.
+   График отрисовывается средствами matplotlib + FigureCanvasTkAgg
 """
 
-import json
-import threading
-
 import tkinter as tk
-import webview
+from tkinter import ttk
+
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import plotly.graph_objects as go
-import plotly.offline
 
 from constants import get_unit
 
-
-PLOTLY_JS = plotly.offline.get_plotlyjs()
-
-BASE_HTML = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<script>{PLOTLY_JS}</script>
-<style>
-  html, body, #plot {{ height: 100%; width: 100%; margin: 0; padding: 0; }}
-</style>
-</head>
-<body>
-<div id="plot" style="height:100%; width:100%"></div>
-<script>
-  var _pending = null;
-  function applyFig(j) {{
-    if (typeof Plotly === 'undefined') {{ _pending = j; return; }}
-    var f = JSON.parse(j);
-    Plotly.react('plot', f.data, f.layout,
-                 {{ responsive: true, displaylogo: false }});
-  }}
-  document.addEventListener('DOMContentLoaded', function () {{
-    if (_pending) {{ applyFig(_pending); _pending = null; }}
-  }});
-</script>
-</body>
-</html>"""
 
 DEFAULT_COLORS = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
@@ -55,36 +22,29 @@ DEFAULT_COLORS = [
 
 
 class PlotManager:
-    """Менеджер интерактивного Plotly-графика, встроенного в Tkinter."""
+    """Менеджер интерактивного matplotlib-графика, встроенного в Tkinter."""
 
     def __init__(self, parent_frame: tk.Widget, df, status_var=None):
         self.parent = parent_frame
         self.df = df
         self.status_var = status_var
         self.x_col = "timestamp"
-        self.traces = []  # список словарей {"col": str, "color": str}
-        self.window = None
+        self.traces = []
         self._color_index = 0
-        self._start_browser()
-        # Первичная отрисовка после готовности браузера.
-        try:
-            self.parent.after(1200, self.refresh)
-        except Exception:
-            pass
 
-    def _start_browser(self):
-        """Запускает браузерный движок в отдельном потоке и грузит базовую HTML."""
-        self.parent.update_idletasks()
-        hwnd = self.parent.winfo_id()
+        self.fig = Figure(facecolor="white")
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_facecolor("white")
 
-        def _run():
-            self.window = webview.create_window(
-                "plot", html=BASE_HTML, parent=hwnd
-            )
-            webview.start()
+        self.canvas = FigureCanvasTkAgg(self.fig, master=parent_frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        thread = threading.Thread(target=_run, daemon=True)
-        thread.start()
+
+        self.toolbar = NavigationToolbar2Tk(self.canvas, parent_frame)
+        self.toolbar.update()
+
+        self._legend_visible = {}
 
     def next_color(self) -> str:
         """Возвращает следующий цвет из палитры по кругу."""
@@ -103,21 +63,24 @@ class PlotManager:
             color = self.next_color()
         if not any(t["col"] == col for t in self.traces):
             self.traces.append({"col": col, "color": color})
+            self._legend_visible[col] = True
         self.refresh()
 
     def remove_line(self, col: str):
         """Удаляет линию по имени параметра."""
         self.traces = [t for t in self.traces if t["col"] != col]
+        self._legend_visible.pop(col, None)
         self.refresh()
 
     def clear(self):
         """Удаляет все линии."""
         self.traces = []
         self._color_index = 0
+        self._legend_visible.clear()
         self.refresh()
 
     def build_fig(self) -> go.Figure:
-        """Строит объект Figure из текущих данных и линий."""
+        """Строит объект Plotly Figure из текущих данных и линий (для экспорта)."""
         fig = go.Figure()
         x = self.df[self.x_col]
 
@@ -142,33 +105,80 @@ class PlotManager:
             xaxis_title=x_title,
             yaxis_title="значение",
             template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            legend=dict(orientation="v", yanchor="bottom", y=1.02, xanchor="left", x=0),
             margin=dict(l=50, r=20, t=50, b=40),
         )
         return fig
 
     def refresh(self):
-        """Отправляет актуальный график в браузер (с сохранением зума)."""
-        if self.window is None:
+        """Перерисовывает matplotlib-график с текущими данными."""
+        self.ax.clear()
+
+        x = self.df[self.x_col]
+        plotted = []
+
+        for t in self.traces:
+            col = t["col"]
+            if col in self.df.columns and self._legend_visible.get(col, True):
+                self.ax.plot(x, self.df[col], color=t["color"], label=col, linewidth=1)
+                plotted.append(col)
+
+        xu = get_unit(self.x_col)
+        x_title = f"{self.x_col} ({xu})" if xu else self.x_col
+
+        self.ax.set_title(f"{self.x_col} | линий: {len(self.traces)}")
+        self.ax.set_xlabel(x_title)
+        self.ax.set_ylabel("значение")
+
+        if plotted:
+            leg = self.ax.legend(
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1.08),
+                ncol=min(len(plotted), 4),
+                fontsize="small",
+                frameon=True,
+            )
+            for line in leg.get_lines():
+                line.set_picker(5)
+            self.canvas.mpl_connect("pick_event", self._on_legend_pick)
+
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+        if self.status_var:
+            visible = sum(1 for v in self._legend_visible.values() if v)
+            self.status_var.set(
+                f"График обновлён: {len(self.traces)} линий, видимых: {visible}"
+            )
+
+    def _on_legend_pick(self, event):
+        """Обрабатывает клик по элементу легенды — переключает видимость линии."""
+        leg = self.ax.get_legend()
+        if leg is None:
             return
-        try:
-            fig = self.build_fig()
-            self.window.evaluate_js(f"applyFig({fig.to_json()})")
-            if self.status_var:
-                self.status_var.set(
-                    f"График обновлён: {len(self.traces)} линий"
-                )
-        except Exception as exc:
-            if self.status_var:
-                self.status_var.set(f"Ошибка обновления графика: {exc}")
+        lines = leg.get_lines()
+        labels = [t.get_text() for t in leg.get_texts()]
+
+        if event.artist not in lines:
+            return
+
+        idx = lines.index(event.artist)
+        if idx >= len(labels):
+            return
+
+        col = labels[idx]
+        current = self._legend_visible.get(col, True)
+        self._legend_visible[col] = not current
+        self.refresh()
 
     def get_figure(self) -> go.Figure:
-        """Возвращает текущий Figure для экспорта."""
+        """Возвращает текущий Plotly Figure для экспорта."""
         return self.build_fig()
 
     def shutdown(self):
-        """Останавливает браузерный движок."""
+        """Очищает ресурсы matplotlib."""
         try:
-            webview.stop()
+            self.toolbar.destroy()
+            self.canvas.get_tk_widget().destroy()
         except Exception:
             pass

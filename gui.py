@@ -251,4 +251,6 @@ https://github.com/itrickon/telemetry_analysis_tt
     def _exit_application(self):
         """Запрашивает подтверждение и выходит из приложения."""
         if messagebox.askyesno("Выход", "Вы уверены, что хотите выйти?"):
+            if self.plot_manager is not None:
+                self.plot_manager.shutdown()
             self.parent.quit()
