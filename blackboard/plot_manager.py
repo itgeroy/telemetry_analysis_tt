@@ -130,17 +130,7 @@ class PlotManager:
         self.ax.set_xlabel(x_title)
         self.ax.set_ylabel("значение")
 
-        if plotted:
-            leg = self.ax.legend(
-                loc="upper center",
-                bbox_to_anchor=(0.5, 1.08),
-                ncol=min(len(plotted), 4),
-                fontsize="small",
-                frameon=True,
-            )
-            for line in leg.get_lines():
-                line.set_picker(5)
-            self.canvas.mpl_connect("pick_event", self._on_legend_pick)
+
 
         self.fig.tight_layout()
         self.canvas.draw()

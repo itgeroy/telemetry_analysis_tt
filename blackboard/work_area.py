@@ -203,8 +203,20 @@ def create_plots_tab(
     """
     frame = ttk.Frame(notebook)
     notebook.add(frame, text="Графики")
+    
+    canvas = tk.Canvas(frame, highlightthickness=0)
+    scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=canvas.yview)
+    inner_frame = ttk.Frame(canvas)
 
-    control_frame = ttk.Frame(frame)
+    inner_frame.bind("<Configure>",
+    lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+    canvas.create_window((0, 0), window=inner_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    control_frame = ttk.Frame(inner_frame)
     control_frame.pack(fill=tk.X, padx=10, pady=5)
 
     # Выбор параметра для оси X
@@ -256,9 +268,22 @@ def create_plots_tab(
         command=lambda: (plot_manager.clear(), update_list())
     )
     clear_btn.grid(row=0, column=6, padx=5, pady=5)
+    
+    # Фрейм для графика (в него встраивается браузер)
+    plot_frame = ttk.Frame(inner_frame)
+    plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+
+    # Создание менеджера графиков (браузер встраивается в plot_frame)
+    plot_manager = PlotManager(plot_frame, df, status_var)
+
+    # Начальная линия для наглядности
+    default_y = df.columns[1] if len(df.columns) > 1 else (df.columns[0] if len(df.columns) else None)
+    if default_y:
+        plot_manager.add_line(default_y, color_var.get())
+        
     # Список добавленных линий с возможностью удаления
-    list_frame = ttk.Frame(frame)
+    list_frame = ttk.Frame(inner_frame)
     list_frame.pack(fill=tk.X, padx=10, pady=2)
 
     def update_list():
@@ -280,17 +305,6 @@ def create_plots_tab(
                 ),
             ).pack(side=tk.RIGHT)
 
-    # Фрейм для графика (в него встраивается браузер)
-    plot_frame = ttk.Frame(frame)
-    plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-    # Создание менеджера графиков (браузер встраивается в plot_frame)
-    plot_manager = PlotManager(plot_frame, df, status_var)
-
-    # Начальная линия для наглядности
-    default_y = df.columns[1] if len(df.columns) > 1 else (df.columns[0] if len(df.columns) else None)
-    if default_y:
-        plot_manager.add_line(default_y, color_var.get())
 
     update_list()
 
